@@ -8,6 +8,9 @@ import android.util.Log;
 
 import com.google.android.gms.maps.model.LatLng;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
 import org.w3c.dom.Comment;
 
 import java.sql.SQLException;
@@ -34,35 +37,33 @@ public class DirectionDataSource {
         dbHelper.close();
     }
 
-    public Directions createRecord(String name,ArrayList<LatLng> latLngs, ArrayList<String> colors){
-        String sLatLngs = "",sColors = "";
+    public void createRecord(String name,ArrayList<LatLng> latLngs, ArrayList<String> colors) throws JSONException {
 
-        for(LatLng latLng : latLngs){
-            sLatLngs += String.valueOf(latLng.latitude) + "," + String.valueOf(latLng.longitude);
-            if(!latLng.equals(latLngs.get(latLngs.size()-1))){
-                sLatLngs += "!";
+        JSONArray jsonColor = new JSONArray();
+        JSONArray jsonLatLng = new JSONArray();
+
+        for(int i=0 ; i<latLngs.size() ; i++){
+            JSONObject objectLatLng = new JSONObject();
+            objectLatLng.put("lat", String.valueOf(latLngs.get(i).latitude));
+            objectLatLng.put("lng", String.valueOf(latLngs.get(i).longitude));
+            jsonLatLng.put(objectLatLng);
+            if(i<colors.size()){
+                JSONObject objectColor = new JSONObject();
+                objectColor.put("color",colors.get(i));
+                jsonColor.put(objectColor);
             }
-        }
-
-        int count = 0;
-        for(String color : colors){
-            sColors += color;
-            count++;
-            if(count != colors.size()){
-                sColors += "!";
-            }
-
         }
 
         ContentValues values = new ContentValues();
         values.put(MySQLiteHelper.NAME,name);
-        values.put(MySQLiteHelper.LATLNG,sLatLngs);
-        values.put(MySQLiteHelper.COLOR,sColors);
-        Cursor cursor = database.query(MySQLiteHelper.TABLE_NAME,allcolumns,MySQLiteHelper.NAME + " = '" + name + "'", null,null,null,null);
-        cursor.moveToFirst();
-        Directions newDirection = cursorToDirection(cursor);
-        cursor.close();
-        return newDirection;
+        values.put(MySQLiteHelper.LATLNG,jsonLatLng.toString());
+        values.put(MySQLiteHelper.COLOR,jsonColor.toString());
+        database.insert(MySQLiteHelper.TABLE_NAME,null,values);
+//        Cursor cursor = database.query(MySQLiteHelper.TABLE_NAME,allcolumns,MySQLiteHelper.NAME + " = '" + name + "'", null,null,null,null);
+//        cursor.moveToFirst();
+//        Directions newDirection = cursorToDirection(cursor);
+//        cursor.close();
+//        return newDirection;
     }
 
     public ArrayList<Directions> getAllDirections(){
@@ -77,7 +78,7 @@ public class DirectionDataSource {
             directions.add(direction);
             cursor.moveToNext();
         }
-
+        Log.d("Cursor",""+directions.size());
         cursor.close();
         return directions;
     }

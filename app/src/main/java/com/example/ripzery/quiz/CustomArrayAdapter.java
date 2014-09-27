@@ -57,9 +57,15 @@ public class CustomArrayAdapter extends BaseAdapter {
         inflater = (LayoutInflater)myActivity.getSystemService(Context.LAYOUT_INFLATER_SERVICE);
         view = inflater.inflate(R.layout.list_item, null);
 
+        view.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                myActivity.loadDirection(i);
+            }
+        });
+
         TextView tvItem = (TextView)view.findViewById(R.id.tvItem);
         Button btnDelete = (Button)view.findViewById(R.id.btnDelete);
-        Button btnView = (Button)view.findViewById(R.id.btnView);
 
         tvItem.setText(list.get(i));
         btnDelete.setOnClickListener(new View.OnClickListener() {
@@ -71,14 +77,6 @@ public class CustomArrayAdapter extends BaseAdapter {
                 customArrayAdapter.notifyDataSetChanged();
             }
         });
-
-        btnView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                myActivity.loadDirection(i);
-            }
-        });
-
 
         return view;
     }

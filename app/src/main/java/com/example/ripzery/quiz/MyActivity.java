@@ -1,5 +1,7 @@
 package com.example.ripzery.quiz;
 
+import android.app.AlertDialog;
+import android.content.DialogInterface;
 import android.graphics.Color;
 import android.hardware.Sensor;
 import android.hardware.SensorEvent;
@@ -27,6 +29,8 @@ import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.google.android.gms.maps.model.PolylineOptions;
 
+import org.json.JSONException;
+
 import java.sql.SQLException;
 import java.util.ArrayList;
 
@@ -51,6 +55,10 @@ public class MyActivity extends FragmentActivity implements SensorEventListener{
     private ArrayList<String> listColors = new ArrayList<String>();
     private final ArrayList<String> list = new ArrayList<String>();
     private ToggleButton tbStatus;
+    private AlertDialog.Builder dialog;
+    private Button btnFinish, btnStart;
+    private EditText inputRecord;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -79,86 +87,13 @@ public class MyActivity extends FragmentActivity implements SensorEventListener{
         final CustomArrayAdapter adapter = new CustomArrayAdapter(this,list);
         listView.setAdapter(adapter);
 
-        Button btnAdd = (Button)findViewById(R.id.btnAdd);
-        final EditText etInsert = (EditText)findViewById(R.id.etInsert);
-        etInsert.setText("Round"+(list.size()+1));
-
-        btnAdd.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                if(listMarkers.size()>0){
-                    String name = etInsert.getText().toString();
-                    list.add(name);
-                    etInsert.setText("Round"+(list.size()+1));
-                    adapter.notifyDataSetChanged();
-
-                    listMarkers.add(0,mMyLocation);
-                    for(Marker marker : listMarkers){
-                        listLatLngs.add(marker.getPosition());
-                    }
-                    datasource.createRecord(name,listLatLngs,listColors);
-                }
-            }
-        });
-
-        mMapClickListener = new GoogleMap.OnMapClickListener() {
-            @Override
-            public void onMapClick(LatLng latLng) {
-                if (abletoAddMarker) {
-                    MarkerOptions markerOptions = new MarkerOptions().position(latLng).title(latLng.toString());
-                    mCurrentMarker = mMap.addMarker(markerOptions);
-                    listMarkers.add(mCurrentMarker);
-                    abletoAddMarker = false;
-                    mSensorManager.registerListener(MyActivity.this, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),SensorManager.SENSOR_DELAY_NORMAL);
-                }
-            }
-        };
-
-        tbStatus = (ToggleButton)findViewById(R.id.tbStatus);
-        tbStatus.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
-            @Override
-            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
-                if(isChecked){
-                    mSensorManager.registerListener(MyActivity.this, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),SensorManager.SENSOR_DELAY_NORMAL);
-                    mMap.setOnMapClickListener(mMapClickListener);
-                    //Recording
-                }else{
-                    mSensorManager.unregisterListener(MyActivity.this);
-                    mMap.setOnMapClickListener(null);
-                    //Stop record
-                }
-            }
-        });
-
-
-
+        setUpListener(adapter);
 
         mSensorManager = (SensorManager)getSystemService(SENSOR_SERVICE);
-
         lastUpdate = System.currentTimeMillis();
         mAccel = 0.00f;
         mAccelCurrent = SensorManager.GRAVITY_EARTH;
         mAccelLast = SensorManager.GRAVITY_EARTH;
-    }
-
-
-    @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        // Inflate the menu; this adds items to the action bar if it is present.
-        getMenuInflater().inflate(R.menu.my, menu);
-        return true;
-    }
-
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        // Handle action bar item clicks here. The action bar will
-        // automatically handle clicks on the Home/Up button, so long
-        // as you specify a parent activity in AndroidManifest.xml.
-        int id = item.getItemId();
-        if (id == R.id.action_settings) {
-            return true;
-        }
-        return super.onOptionsItemSelected(item);
     }
 
     @Override
@@ -200,8 +135,6 @@ public class MyActivity extends FragmentActivity implements SensorEventListener{
         mAccel = mAccel * 0.9f + delta; // low-cut filter
         mAccel = Math.abs(mAccel);
         long actualTime = System.currentTimeMillis();
-
-
 
         if(mAccel > 4 && !isFirstLocation){
             if(actualTime - lastUpdate < 3000){
@@ -264,18 +197,121 @@ public class MyActivity extends FragmentActivity implements SensorEventListener{
         }
     }
 
-    public void loadDirection(int index){
-        mMap.setMyLocationEnabled(false);
-        mMap.setOnMyLocationChangeListener(null);
+    public void setUpListener(final CustomArrayAdapter adapter){
+        mMapClickListener = new GoogleMap.OnMapClickListener() {
+            @Override
+            public void onMapClick(LatLng latLng) {
+                if (abletoAddMarker) {
+                    MarkerOptions markerOptions = new MarkerOptions().position(latLng).title(latLng.toString());
+                    mCurrentMarker = mMap.addMarker(markerOptions);
+                    listMarkers.add(mCurrentMarker);
+                    abletoAddMarker = false;
+                    mSensorManager.registerListener(MyActivity.this, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),SensorManager.SENSOR_DELAY_NORMAL);
+                }
+            }
+        };
+
+        tbStatus = (ToggleButton)findViewById(R.id.tbStatus);
+        tbStatus.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton compoundButton, boolean isChecked) {
+                if(isChecked){
+                    addRealTimeListener();
+                    //Recording
+                }else{
+                    removeRealTimeListener();
+                    //Stop record
+                }
+            }
+        });
+
+        btnFinish = (Button)findViewById(R.id.btnFinish);
+        btnFinish.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                dialog = new AlertDialog.Builder(MyActivity.this);
+                dialog.setTitle("New Record");
+                inputRecord = new EditText(MyActivity.this);
+                inputRecord.setHint("Enter record");
+                dialog.setView(inputRecord);
+                dialog.setPositiveButton("OK", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+                        if(!inputRecord.getText().toString().equals("") && listMarkers.size()>0)     {
+                            String name = inputRecord.getText().toString();
+                            list.add(name);
+                            adapter.notifyDataSetChanged();
+
+                            listMarkers.add(0,mMyLocation);
+                            for(Marker marker : listMarkers){
+                                listLatLngs.add(marker.getPosition());
+                            }
+
+                            try {
+                                datasource.createRecord(name,listLatLngs,listColors);
+                            } catch (JSONException e) {
+                                e.printStackTrace();
+                            }
+                            listMarkers.clear();
+                            mMap.clear();
+                            listLatLngs.clear();
+                            isFirstLocation = true;
+                            tabHost.setCurrentTab(0);
+                            listDirections = datasource.getAllDirections();
+                        }
+                    }
+                });
+
+                dialog.setNegativeButton("Cancel", new DialogInterface.OnClickListener() {
+                    @Override
+                    public void onClick(DialogInterface dialogInterface, int i) {
+
+                    }
+                });
+
+                dialog.show();
+            }
+        });
+
+        btnStart = (Button)findViewById(R.id.btnStart);
+        btnStart.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View view) {
+                mMap.clear();
+                isFirstLocation = true;
+                tbStatus.setVisibility(View.VISIBLE);
+                tbStatus.setChecked(true);
+                btnFinish.setVisibility(View.VISIBLE);
+                btnStart.setVisibility(View.GONE);
+            }
+        });
+    }
+
+    public void addRealTimeListener(){
+        mSensorManager.registerListener(MyActivity.this, mSensorManager.getDefaultSensor(Sensor.TYPE_ACCELEROMETER),SensorManager.SENSOR_DELAY_NORMAL);
+        mMap.setOnMapClickListener(mMapClickListener);
+    }
+
+    public void removeRealTimeListener(){
         mSensorManager.unregisterListener(MyActivity.this);
         mMap.setOnMapClickListener(null);
+    }
+
+    public void loadDirection(int index){
         PolylineOptions polyline;
+        isFirstLocation = false;
         mMap.clear();
         tabHost.setCurrentTab(1);
-        tbStatus.setClickable(false);
+        btnFinish.setVisibility(View.GONE);
+        tbStatus.setChecked(false);
+        tbStatus.setVisibility(View.GONE);
+        btnStart.setVisibility(View.VISIBLE);
+
         Directions target = listDirections.get(index);
+//        Log.d("Index",""+index);
         ArrayList<LatLng> listTarget = target.getListLatLngs();
         ArrayList<String> listColors = target.getListColors();
+//        Log.d("Check Number","latlng : "+listTarget.size()+", colors : "+listColors.size());
         int count = 0;
         for(LatLng latLng : listTarget){
             mMap.addMarker(new MarkerOptions().position(latLng));
